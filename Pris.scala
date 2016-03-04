@@ -21,6 +21,7 @@ object Pris {/*-----object-----*/
 sealed abstract class Move
 case object Cooperate extends Move
 case object Defect extends Move
+case object None extends Move
 
 /* a Round is a move by both players */
 type Round = (Move,Move)
@@ -40,6 +41,22 @@ type Log = (List[Move],List[Move])
 trait Strategy {
     /* within a round, it is (myMove,otherPlayersMove) */
     def nextMove(log: Log): Move
+
+    //----- helper functions:
+
+    def otherPrev(log:Log, i:Int =1):Move = {
+        /* otherPrev(log,1) == the other player's last move
+           otherPrev(log,2) == the other player's last but one move,
+           etc.
+        */
+        val otherMoves = log._2
+        if (i < 1 || i > otherMoves.length)
+            None
+        else
+            otherMoves(i-1)
+    }
+
+    def name = this.getClass.getName
 }
 
 /* always defect */
@@ -60,6 +77,25 @@ class TitForTat extends Strategy {
     }
 }
 
+/* punish twice for defection (2 tits for tat) */
+class Punisher extends Strategy {
+    def nextMove(log: Log) = {
+        if (otherPrev(log,1)==Defect || otherPrev(log,2)==Defect)
+            Defect
+        else
+            Cooperate
+    }
+}
+
+/* punish only if opponent defected in both his last two moves */
+class Lenient extends Strategy {
+    def nextMove(log: Log) = {
+        if (otherPrev(log,1)==Defect && otherPrev(log,2)==Defect)
+            Defect
+        else
+            Cooperate
+    }
+}
 
 //--------------------------------------------------------------------
 // A game
@@ -96,18 +132,43 @@ def moveScore(round: Round): Int = round match {
     case (Cooperate,Defect)    => 0
     case (Defect,Cooperate)    => 5
     case (Defect,Defect)       => 1
+    case (_,_)                 => 0
 }
+
+//--------------------------------------------------------------------
+/* a tournament */
+
+val gameLength = 20
+val strats = List(new AllC, new AllD,
+    new TitForTat, new Punisher, new Lenient)
+
+def printStrats = {
+    for (s <- strats){
+        val sn = s.name
+        println(s"Strategy: ${sn}")
+    }
+}
+
+def playStrat(st: Strategy): Int = {
+    val scores: Int = for (opponent <- strats)
+        yield getScore(game(st, opponent))
+    scores.sum
+}
+
 
 //--------------------------------------------------------------------
 // play a game
 
 def main(args: Array[String]) = {
+    printStrats
+/*
     val tft = new TitForTat()
     val ad = new AllD()
     var log = game(tft, ad, 10)
     println("Result of game:")
     println(log)
     println(s"Scores: ${getScores(log)}")
+*/
 }
 
 
