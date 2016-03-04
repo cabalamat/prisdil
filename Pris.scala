@@ -26,8 +26,11 @@ case object Defect extends Move
 type Round = (Move,Move)
 
 /* a Log is a list of Rounds -- it is what has happened in the
-game so far. The most recent move goes at the head of the list. */
-type Log = List[Round]
+game so far. The most recent move goes at the head of the list.
+The log is from the player's point of view so it is
+(myMoves, otherPlayersMoves)
+*/
+type Log = (List[Move],List[Move])
 
 
 //--------------------------------------------------------------------
@@ -52,37 +55,41 @@ class AllC extends Strategy {
 /* C first, then do what the other player did last time */
 class TitForTat extends Strategy {
     def nextMove(log: Log) = log match {
-        case Nil => Cooperate
-        case (me,other)::rs => other /* other player's last move */
+        case (_, Nil) => Cooperate
+        case (_, m::ms) => m
     }
 }
+
 
 //--------------------------------------------------------------------
 // A game
 
 /* play a game between two strategies and return the result */
 def game(s1: Strategy, s2:Strategy, numMoves: Int): Log = {
-    var log: Log = List() // from s1's point of view
+    var log: Log = (Nil,Nil) // from s1's point of view
     for (movNum <- 1 to numMoves){
         val s1move: Move = s1.nextMove(log)
         val s2move: Move = s2.nextMove(switchSide(log))
-        log = (s1move,s2move)::log
+        log = (s1move::log._1,s2move::log._2)
     }
     log
 }
 
 /* switch the players in a log */
 def switchSide(log: Log): Log = {
-    for ((m1,m2) <- log) yield (m2,m1)
+    return (log._2,log._1)
 }
 
 /* return the scores of a game */
 def getScores(log: Log): (Int, Int) =
     (getScore(log), getScore(switchSide(log)))
 
+
 /* get the score for player 1 */
-def getScore(log: Log): Int =
-    log.map{moveScore(_)}.sum
+def getScore(log: Log): Int = {
+    val zippedLog = log._1 zip log._2
+    zippedLog.map{moveScore(_)}.sum
+}
 
 def moveScore(round: Round): Int = round match {
     case (Cooperate,Cooperate) => 3
@@ -90,7 +97,6 @@ def moveScore(round: Round): Int = round match {
     case (Defect,Cooperate)    => 5
     case (Defect,Defect)       => 1
 }
-
 
 //--------------------------------------------------------------------
 // play a game
