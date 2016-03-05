@@ -56,7 +56,9 @@ trait Strategy {
             otherMoves(i-1)
     }
 
-    def name = this.getClass.getName
+    /* note that we have to use split("\\$") because the argument
+       is a regexp. */
+    def name = this.getClass.getName.split("\\$").last
 }
 
 /* always defect */
@@ -96,6 +98,18 @@ class Lenient extends Strategy {
             Cooperate
     }
 }
+
+
+/* randomly C or D, 50% prob of each */
+class RandomStrat extends Strategy {
+    def nextMove(log: Log) = {
+        if (scala.util.Random.nextInt(2)==0)
+            Defect
+        else
+            Cooperate
+    }
+}
+
 
 //--------------------------------------------------------------------
 // A game
@@ -139,20 +153,29 @@ def moveScore(round: Round): Int = round match {
 /* a tournament */
 
 val gameLength = 20
-val strats = List(new AllC, new AllD,
+val strats = List(new AllC, new AllD, new RandomStrat,
     new TitForTat, new Punisher, new Lenient)
+    
+// number of rounds that each strategy plays    
+val numRounds = gameLength * strats.length    
 
 def printStrats = {
     for (s <- strats){
         val sn = s.name
-        println(s"Strategy: ${sn}")
+        println(s"Strategy: ${sn}  ${playStrat(s)}")
     }
 }
 
+/* get a score for each strat, being the average score per round */
+def playStrats: List[Int] = {
+    for (st <- strats) yield playStrat(st)
+}
 def playStrat(st: Strategy): Int = {
-    val scores: Int = for (opponent <- strats)
-        yield getScore(game(st, opponent))
+    //val scores = strats.map({getScore(game(st, _, gameLength))})
+    //scores.sum
+    val scores = for (op <- strats) yield getScore(game(st, op, gameLength))
     scores.sum
+    
 }
 
 
