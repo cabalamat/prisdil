@@ -59,6 +59,13 @@ trait Strategy {
     /* note that we have to use split("\\$") because the argument
        is a regexp. */
     def name = this.getClass.getName.split("\\$").last
+    
+    /* psuedo-random number generator that uses the log */
+    def prng(log: Log): scala.util.Random = {
+        val seed = scala.util.hashing.MurmurHash3.stringHash(s"$log")
+        new scala.util.Random(seed)
+    }
+    
 }
 
 /* always defect */
@@ -99,14 +106,47 @@ class Lenient extends Strategy {
     }
 }
 
-
 /* randomly C or D, 50% prob of each */
 class RandomStrat extends Strategy {
     def nextMove(log: Log) = {
-        if (scala.util.Random.nextInt(2)==0)
+        if (prng(log).nextInt(2)==0)
             Defect
         else
             Cooperate
+    }
+}
+
+/* mostly TFT, but defect randomly 10% of the time */
+class MostlyTFT extends TitForTat {
+    override def nextMove(log: Log) = {
+        if (prng(log).nextInt(10)==0)
+            Defect
+        else
+            super.nextMove(log)
+    }
+}
+
+
+/* a deliberately bad strategy */
+class Bad extends Strategy {
+    def nextMove(log: Log) = {
+        if (log._1.length < 2)
+            Defect
+        else
+            Cooperate
+    }
+}
+
+/* TFT, but defect on last (defectLast) moves */
+class DefAtEnd(defectLast: Int) extends TitForTat {
+    override def name = 
+        super.name + s"($defectLast)"
+    override def nextMove(log: Log) = {
+        val defectZone = gameLength - log._1.length <= defectLast
+        if (defectZone)
+            Defect
+        else
+            super.nextMove(log)
     }
 }
 
@@ -122,6 +162,7 @@ def game(s1: Strategy, s2:Strategy, numMoves: Int): Log = {
         val s2move: Move = s2.nextMove(switchSide(log))
         log = (s1move::log._1,s2move::log._2)
     }
+    //println(s"${s1.name} ${s2.name} ${log}")
     log
 }
 
@@ -152,46 +193,46 @@ def moveScore(round: Round): Int = round match {
 //--------------------------------------------------------------------
 /* a tournament */
 
-val gameLength = 20
+val gameLength = 200
 val strats = List(new AllC, new AllD, new RandomStrat,
-    new TitForTat, new Punisher, new Lenient)
+    new TitForTat, new Punisher, new Lenient, new MostlyTFT,
+    new DefAtEnd(1), new DefAtEnd(2), new DefAtEnd(3),
+    new Bad)
     
 // number of rounds that each strategy plays    
 val numRounds = gameLength * strats.length    
 
-def printStrats = {
-    for (s <- strats){
-        val sn = s.name
-        println(s"Strategy: ${sn}  ${playStrat(s)}")
-    }
+def playStrat(st: Strategy): Int = {
+    //val scores = strats.map({getScore(game(st, _, gameLength))})
+    //scores.sum
+    val scores = for (op <- strats) yield getScore(game(st, op, gameLength))
+    scores.sum 
 }
 
 /* get a score for each strat, being the average score per round */
 def playStrats: List[Int] = {
     for (st <- strats) yield playStrat(st)
 }
-def playStrat(st: Strategy): Int = {
-    //val scores = strats.map({getScore(game(st, _, gameLength))})
-    //scores.sum
-    val scores = for (op <- strats) yield getScore(game(st, op, gameLength))
-    scores.sum
-    
+
+def printStrats = {
+    val scores = playStrats
+    val stratScores: List[(String, Int)] = strats.map(_.name) zip scores
+    val sortedScores = stratScores.sorted(
+        Ordering[(Int, String)].on(
+            (x:(String, Int)) => (-x._2, x._1)))
+    for (nameScore <- sortedScores) {
+        val stratName = nameScore._1
+        val score = nameScore._2
+        val avScore:Double = score * 1.0 / numRounds
+        println(f"$stratName%-12s $score%4d  $avScore%6.4f")   
+    }
 }
-
-
+    
 //--------------------------------------------------------------------
 // play a game
 
 def main(args: Array[String]) = {
     printStrats
-/*
-    val tft = new TitForTat()
-    val ad = new AllD()
-    var log = game(tft, ad, 10)
-    println("Result of game:")
-    println(log)
-    println(s"Scores: ${getScores(log)}")
-*/
 }
 
 
